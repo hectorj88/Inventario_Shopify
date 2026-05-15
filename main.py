@@ -21,6 +21,8 @@ st.sidebar.header("Filtros de Búsqueda")
 
 # Cargamos los datos crudos inicialmente
 data = sheet.get_inventory_data("Inventario")
+# Creamos la columna 'Tipo' aplicando la función fila por fila
+#data['Tipo'] = data['product_title'].apply(sheet.categorizar_producto)
 
 def resetear_formulario():
     for i in range(5):
@@ -42,12 +44,21 @@ with tab_visualizacion:
         # Filtros
         #################################################################
         # Nuevo filtro: Excluir negativos
-        exclude_neg = st.sidebar.checkbox("Excluir stock negativo", value=False)
+        exclude_neg = st.sidebar.checkbox("🚫 Excluir stock negativo", value=False)
+        filtro_pollo = st.sidebar.checkbox("🍗 Pollo", value=False)
+        filtro_carne = st.sidebar.checkbox("🥩 Carne", value=False)
+        filtro_cerdo = st.sidebar.checkbox("🐷 Cerdo", value=False)
+        filtro_kit   = st.sidebar.checkbox("📦 Kit", value=False)
 
         # Extraemos valores únicos para las listas desplegables, eliminando nulos
         list_skus = sorted(data['sku'].astype(str).unique())
         list_titles = sorted(data['product_title'].dropna().unique())
         list_variants = sorted(data['variant_title'].dropna().unique())
+
+        # Extraemos los tipos únicos disponibles en los datos
+        list_tipos = sorted(data['Tipo'].dropna().unique())
+        # Nuevo filtro por categoría/tipo de producto
+        search_tipo = st.sidebar.multiselect("Seleccionar Tipo de Producto", options=list_tipos)
 
         # Sustituimos text_input por multiselect
         search_product = st.sidebar.multiselect("Seleccionar Productos", options=list_titles)
@@ -75,6 +86,24 @@ with tab_visualizacion:
             exclude_negative=exclude_neg # Pasamos el valor del checkbox
         )
 
+        # === NUEVO FRAGMENTO: Aplicar filtros de palabras clave ===
+        palabras_filtro = []
+        if filtro_pollo: palabras_filtro.append('pollo')
+        if filtro_carne: palabras_filtro.append('carne')
+        if filtro_cerdo: palabras_filtro.append('cerdo')
+        if filtro_kit:   palabras_filtro.append('kit')
+
+        if search_tipo:
+            # Si el usuario seleccionó uno o varios tipos, filtramos el DataFrame
+            filtered_data = filtered_data[filtered_data['Tipo'].isin(search_tipo)]
+        
+        # Si el usuario seleccionó al menos un checkbox, filtramos el DataFrame
+        if palabras_filtro:
+            # Creamos una máscara booleana: busca si el título contiene CUALQUIERA de las palabras seleccionadas
+            # case=False hace que no importe si está en mayúsculas o minúsculas
+            mascara = filtered_data['product_title'].str.contains('|'.join(palabras_filtro), case=False, na=False)
+            filtered_data = filtered_data[mascara]
+
         #################################################################
         # CUERPO PRINCIPAL: VISUALIZACIÓN
         #################################################################
@@ -92,19 +121,20 @@ with tab_visualizacion:
         max_stock_global = int(data['inventory_quantity'].max()) if not data.empty else 100
 
         config_visual = {
-            "product_title": st.column_config.TextColumn("Producto", width="large"),
-            "variant_title": st.column_config.TextColumn("Gramaje", width="medium"),
+            "product_title": st.column_config.TextColumn("Producto", width="small"),
+            "variant_title": st.column_config.TextColumn("Gramaje", width="small"),
             "Visual": st.column_config.ProgressColumn(
                 "Nivel de Stock",
                 help="Vista horizontal del inventario disponible",
                 format="%d", # Muestra el número dentro o junto a la barra
                 min_value=0,
                 max_value=max_stock_global,
+                width="small",
             )
         }
 
         #Columnas a mostrar
-        display_cols = ['product_title', 'variant_title', 'Visual']
+        display_cols = [ 'Visual', 'product_title', 'variant_title']
 
         # --- TABLA 1: MENOS DE 50 UNIDADES ---
         st.subheader("🔴 Crítico: Menos de 50 unidades")
@@ -231,10 +261,11 @@ with tab_actualizacion:
                     
                     # 3. Agregamos la fecha
                     df_final["fecha_registro"] = datetime.now(bogota_tz).strftime("%d/%m/%Y %H:%M:%S")
+                    df_agregar = df_final[df_final['inventory_quantity'] > 0]
 
                     # 4. Actualizar hoja "Agregar_Inventario" (Solo las columnas necesarias)
                     cols_hoja_agregar = ['inventory_item_id', 'product_id', 'sku', 'inventory_quantity']
-                    sheet.update_inventory("Agregar_Inventario", df_final[cols_hoja_agregar])
+                    sheet.update_inventory("Agregar_Inventario", df_agregar[cols_hoja_agregar])
 
                     # 5. Actualizar hoja "Registro_Inventario" (Historial completo)
                     # Puedes enviar el df_final completo o seleccionar columnas específicas

@@ -78,6 +78,12 @@ def get_inventory_data(hoja):
         print(f"\nDatos Extraidos con Exito")
         df['inventory_quantity'] = df['inventory_quantity'].astype(int)
         df['variant_title'] = df['variant_title'].replace("Default Title", "Sin Info.").replace("¡Si quiero!", "Sin Info.")
+        
+        # Creamos la columna 'Tipo' aplicando la función fila por fila
+        df['Tipo'] = df['product_title'].apply(categorizar_producto)
+
+        # Limpiamos los productos/frases no deseados
+        df = limpiar_productos_no_deseados(df)
         return df
     except Exception as e:
         print(f"\nOcurrió un error al intentar extraer los datos:\n {e}")
@@ -165,6 +171,105 @@ def limpiar_inputs():
         if f"num_{i}" in st.session_state:
             # Aquí lo reiniciamos a 0 o al valor que prefieras
             st.session_state[f"num_{i}"] = 0
+
+def categorizar_producto(product_title):
+    # Si el título es nulo o vacío, devolvemos un valor genérico
+    if not isinstance(product_title, str) or not product_title.strip():
+        return "SIN CATEGORÍA"
+    
+    # Convertimos a minúsculas para una búsqueda insensible a mayúsculas
+    title_lower = product_title.lower()
+    
+    # 1. SOPAS (Prioridad alta por si contienen 'res' o 'pollo')
+    if 'sancocho' in title_lower or 'caldo' in title_lower or 'ajiaco' in title_lower:
+        return "SOPAS"
+        
+    # 2. PROTEÍNAS DE PESCADO
+    elif 'trucha' in title_lower or 'tilapia' in title_lower or 'salmon' in title_lower:
+        return "PROTEINAS DE PESCADO"
+        
+    # 3. VEGANA / VEGETARIANA
+    elif 'vegana' in title_lower or 'garbanzo individual' in title_lower:
+        return "VEGANA"
+        
+    # 4. PROTEÍNAS DE POLLO
+    elif 'pollo' in title_lower or 'pierna pernil' in title_lower or 'pechuga' in title_lower or 'muslo' in title_lower or 'colombinas' in title_lower:
+        return "PROTEINAS DE POLLO"
+        
+    # 5. PROTEÍNAS DE CERDO
+    elif 'pork' in title_lower or 'cerdo' in title_lower or 'costillas' in title_lower or 'chuleta' in title_lower:
+        return "PROTEINAS DE CERDO"
+        
+    # 6. PROTEÍNAS DE CARNE (RES)
+    elif 'carne' in title_lower or 'lomo' in title_lower or 'gulash' in title_lower or 'goulash' in title_lower or 'albondigas' in title_lower:
+        return "PROTEINAS DE CARNE"
+        
+    # 7. GRANOS
+    elif 'lentejas' in title_lower or 'garbanzos' in title_lower or 'frijol' in title_lower:
+        return "GRANOS"
+        
+    # 8. VEGETALES
+    elif 'vegetales' in title_lower or 'mix con acelgas' in title_lower or 'habichuelas' in title_lower or 'calabaza' in title_lower:
+        return "VEGETALES"
+        
+    # 9. CARBOHIDRATOS
+    elif 'quinoa' in title_lower or 'papa' in title_lower or 'pure' in title_lower or 'plátano' in title_lower or 'platano' in title_lower or 'pasta' in title_lower or 'maduritos' in title_lower or 'arroz' in title_lower:
+        # Excepción: Arroz con pollo o arepa con pollo/carne ya entraron en las categorías de arriba por orden de prioridad
+        return "CARBOHIDRATOS"
+        
+    # 10. PRODUCTOS EXTRAS (Desayunos, panadería, snacks, batidos)
+    elif 'pudin' in title_lower or 'pandebono' in title_lower or 'empanada' in title_lower or 'buñuelo' in title_lower or 'batido' in title_lower or 'avena' in title_lower or 'frambuesas' in title_lower or 'arandanos' in title_lower:
+        return "PRODUCTOS EXTRAS"
+        
+    # Por si se pasa algún producto nuevo que no mapee con las reglas anteriores
+    return "SIN CATEGORÍA"
+
+def limpiar_productos_no_deseados(df):
+    """
+    Elimina las filas del DataFrame cuyo 'product_title' coincida exactamente 
+    con la lista de frases, kits promocionales o preguntas del sistema.
+    """
+    # Si el DataFrame está vacío, no hacemos nada
+    if df.empty:
+        return df
+
+    # Lista exacta de frases completas a eliminar
+    frases_a_eliminar = [
+        "Kit 7 Almuerzos Caseros Congelados",
+        "Kit semanal",
+        "Kit 14 Comidas Caseras Congeladas",
+        "Kit premium",
+        "Kit runner",
+        "Kit recomendado del chef",
+        "Historia redi",
+        "Kit favoritos de la casa",
+        "- Juan S",
+        "- Camila P",
+        "- Rafael C",
+        "- Barbara N",
+        "- Mateo R",
+        "-Camila S",
+        "¿Quieres añadir un plato extra, por un precio adicional?",
+        "¿Quieres agrandar el tamaño de tu proteína, por un precio adicional?",
+        "Kit 14 Comidas Caseras Congeladas Nuevo",
+        "Kit runner Nuevo",
+        "Kit premium Nuevo",
+        "Kit semanal Nuevo",
+        "Kit 7 Almuerzos Caseros Congelados Nuevo",
+        "Kit Mahe por Cata Mahecha",
+        "Kit proteínas Nuevo",
+        "Kit platos extra test (Kit semanal)",
+        "Kit proteínas",
+        "Pizza Cebolla Caramelizada y Queso Colby Jack y Tocineta",
+        "Pizza de Pepperoni",
+        "Pizza Mozzarella DiBuffala"
+    ]
+    
+    # Nos aseguramos de limpiar espacios en blanco adicionales antes de comparar
+    # El símbolo ~ significa 'NOT' (traer todo lo que NO esté en la lista)
+    df_limpio = df[~df['product_title'].astype(str).str.strip().isin(frases_a_eliminar)]
+    
+    return df_limpio
 
 '''
 df = get_inventory_data("Inventario")
